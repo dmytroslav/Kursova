@@ -1,0 +1,92 @@
+-- Створення бази даних для Data Warehouse
+CREATE DATABASE RoomRentalDW;
+GO
+
+-- Перехід до бази
+USE RoomRentalDW;
+GO
+
+-- Таблиця фактів рахунків
+CREATE TABLE FactInvoices (
+    InvoiceID INT PRIMARY KEY,
+    TenantID INT NOT NULL,
+    RoomID INT NOT NULL,
+    ContractID INT NOT NULL,
+    InvoiceDate DATE NOT NULL,
+    DueDate DATE NOT NULL,
+    Amount DECIMAL(10, 2) NOT NULL,
+    Tax DECIMAL(10, 2) NOT NULL,
+    Penalty DECIMAL(10, 2) NOT NULL,
+    IsPaid BIT NOT NULL DEFAULT 0,
+    PaymentAmount DECIMAL(10, 2),
+    PaymentDate DATE,
+    FOREIGN KEY (TenantID) REFERENCES RoomRental.Tenants(TenantID),
+    FOREIGN KEY (RoomID) REFERENCES RoomRental.Rooms(RoomID),
+    FOREIGN KEY (ContractID) REFERENCES RoomRental.RentalContracts(ContractID)
+);
+
+-- Таблиця вимірів орендаря
+CREATE TABLE DimTenants (
+    TenantID INT PRIMARY KEY,
+    TenantName NVARCHAR(200) NOT NULL,
+    LegalAddress NVARCHAR(500) NOT NULL,
+    Bank NVARCHAR(200) NOT NULL,
+    Director NVARCHAR(100) NOT NULL,
+    Description NVARCHAR(MAX)
+);
+
+-- Таблиця вимірів приміщень
+CREATE TABLE DimRooms (
+    RoomID INT PRIMARY KEY,
+    RoomNumber NVARCHAR(50) NOT NULL,
+    Area DECIMAL(10, 2) NOT NULL,
+    RoomTypeName NVARCHAR(100) NOT NULL
+);
+
+-- Таблиця вимірів типів приміщень
+CREATE TABLE DimRoomTypes (
+    RoomTypeID INT PRIMARY KEY,
+    RoomTypeName NVARCHAR(100) NOT NULL,
+    PricePerSquareMeter DECIMAL(10, 2) NOT NULL
+);
+
+-- Таблиця вимірів часу (з використанням календаря для розрізу за датами)
+CREATE TABLE DimTime (
+    Date DATE PRIMARY KEY,
+    Year INT NOT NULL,
+    Month INT NOT NULL,
+    Day INT NOT NULL,
+    Quarter INT NOT NULL,
+    IsWeekend BIT NOT NULL
+);
+
+-- Індекс для прискорення запитів по датах
+CREATE INDEX IX_FactInvoices_Date ON FactInvoices (InvoiceDate);
+
+-- Індекс для прискорення пошуку по орендарям та приміщенням
+CREATE INDEX IX_FactInvoices_Tenant_Room ON FactInvoices (TenantID, RoomID);
+
+-- Тригери для оновлення даних у фактах з таблиць транзакцій
+
+-- Тригер для оновлення фактичних даних при додаванні нового рахунку
+CREATE TRIGGER trg_FactInvoices_Insert
+ON RoomRental.Invoices
+AFTER INSERT
+AS
+BEGIN
+    INSERT INTO FactInvoices (InvoiceID, TenantID, RoomID, ContractID, InvoiceDate, DueDate, Amount, Tax, Penalty, IsPaid)
+    SELECT InvoiceID, TenantID, RoomID, ContractID, InvoiceDate, DueDate, Amount, Tax, Penalty, IsPaid
+    FROM inserted;
+END;
+
+-- Тригер для оновлення даних про платіж
+CREATE TRIGGER trg_FactPayments_Update
+ON RoomRental.Payments
+AFTER INSERT
+AS
+BEGIN
+    UPDATE fi
+    SET fi.PaymentAmount = p.Amount, fi.PaymentDate = p.PaymentDate
+    FROM FactInvoices fi
+    INNER JOIN inserted p ON fi.InvoiceID = p.InvoiceID;
+END;
