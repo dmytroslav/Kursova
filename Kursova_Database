@@ -1,0 +1,69 @@
+-- Створення бази даних
+CREATE DATABASE RoomRental;
+GO
+
+-- Перехід до бази
+USE RoomRental;
+GO
+
+-- Таблиця типів приміщень
+CREATE TABLE RoomTypes (
+    RoomTypeID INT PRIMARY KEY IDENTITY(1,1),
+    RoomTypeName NVARCHAR(100) NOT NULL,
+    PricePerSquareMeter DECIMAL(10, 2) NOT NULL
+);
+
+
+
+-- Таблиця приміщень
+CREATE TABLE Rooms (
+    RoomID INT PRIMARY KEY IDENTITY(1,1),
+    RoomNumber NVARCHAR(50) NOT NULL UNIQUE,
+    Area DECIMAL(10, 2) NOT NULL,
+    RoomTypeID INT NOT NULL,
+    FOREIGN KEY (RoomTypeID) REFERENCES RoomTypes(RoomTypeID)
+);
+
+-- Таблиця орендарів
+CREATE TABLE Tenants (
+    TenantID INT PRIMARY KEY IDENTITY(1,1),
+    TenantName NVARCHAR(200) NOT NULL,
+    LegalAddress NVARCHAR(500) NOT NULL,
+    Bank NVARCHAR(200) NOT NULL,
+    Director NVARCHAR(100) NOT NULL,
+    Description NVARCHAR(MAX)
+);
+
+-- Таблиця орендних договорів
+CREATE TABLE RentalContracts (
+    ContractID INT PRIMARY KEY IDENTITY(1,1),
+    TenantID INT NOT NULL,
+    RoomID INT NOT NULL,
+    StartDate DATE NOT NULL,
+    EndDate DATE NOT NULL,
+    FOREIGN KEY (TenantID) REFERENCES Tenants(TenantID),
+    FOREIGN KEY (RoomID) REFERENCES Rooms(RoomID),
+    CONSTRAINT UQ_Room_Tenant UNIQUE (RoomID, StartDate, EndDate)
+);
+
+-- Таблиця рахунків
+CREATE TABLE Invoices (
+    InvoiceID INT PRIMARY KEY IDENTITY(1,1),
+    ContractID INT NOT NULL,
+    InvoiceDate DATE NOT NULL,
+    DueDate DATE NOT NULL,
+    Amount DECIMAL(10, 2) NOT NULL,
+    Tax DECIMAL(10, 2) NOT NULL DEFAULT 0.20,
+    Penalty DECIMAL(10, 2) NOT NULL DEFAULT 0.002,
+    IsPaid BIT NOT NULL DEFAULT 0,
+    FOREIGN KEY (ContractID) REFERENCES RentalContracts(ContractID)
+);
+
+-- Таблиця платежів
+CREATE TABLE Payments (
+    PaymentID INT PRIMARY KEY IDENTITY(1,1),
+    InvoiceID INT NOT NULL,
+    PaymentDate DATE NOT NULL,
+    Amount DECIMAL(10, 2) NOT NULL,
+    FOREIGN KEY (InvoiceID) REFERENCES Invoices(InvoiceID)
+);
